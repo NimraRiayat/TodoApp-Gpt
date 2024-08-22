@@ -1,0 +1,70 @@
+version: "3.9"
+
+name: todogpt
+
+services:
+  postgres_db:
+    image: postgres:13
+    restart: always
+    container_name: postgresCont01
+    environment:
+      POSTGRES_USER: nimra
+      POSTGRES_PASSWORD: my_password
+      POSTGRES_DB: tododb
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_db:/var/lib/postgresql/data
+    networks:
+      - my-todoapi-net
+
+  todo-app:
+    container_name: todo-app
+    build: 
+      context: ./todo-app
+      dockerfile: Dockerfile.dev
+    depends_on:
+      - postgres_db
+    environment:
+      DB_URL: postgresql://nimra:my_password@postgresCont01:5432/tododb
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./todo-app:/code
+    command:
+      [
+        "poetry",
+        "run",
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8001",
+        "--reload",
+      ]
+    networks:
+      - my-todoapi-net
+  
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: "tunnel --no-autoupdate"
+    environment:
+      - TUNNEL_URL=http://todo-app:8001
+    volumes:
+      - ./cloudflared:/etc/cloudflared
+    depends_on:
+      - todo-app
+    networks:
+      - my-todoapi-net
+  
+
+volumes:
+  postgres_db:
+    driver: local
+
+networks:
+  my-todoapi-net:
+    driver: bridge
+ # Define the custom network
